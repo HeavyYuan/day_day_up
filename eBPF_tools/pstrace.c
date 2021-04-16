@@ -93,7 +93,7 @@ static int do_trace(struct pt_regs *ctx, const char *func_name, struct sock *sk,
     }else if(layer == L1){
        struct tcphdr *tcp = skb_to_tcphdr(skb);
        struct iphdr *ip = skb_to_iphdr(skb);    
-       rotocol = ip->protocol;
+       protocol = ip->protocol;
        bpf_probe_read_kernel(&ipv4_event.saddr, sizeof(ipv4_event.saddr), &(ip->saddr));
        saddr = ip->saddr;
        daddr = ip->daddr;
@@ -137,21 +137,19 @@ static int do_trace(struct pt_regs *ctx, const char *func_name, struct sock *sk,
 int kprobe__tcp_sendmsg(struct pt_regs *ctx,struct sock *sk)
 //int kprobe__tcp_sendmsg(struct pt_regs *ctx,struct sock *sk, struct msghdr *msg, size_t size)
 {
-    
     return do_trace(ctx, __func__+8, sk, NULL, L3);
-    
 }
 
 int kprobe__tcp_write_xmit(struct pt_regs *ctx,struct sock *sk)
 {
-    return 0;
+    return do_trace(ctx, __func__+8, sk, NULL, L3);
 }
 
 
 /* Build TCP header and checksum it. */
 int kprobe____tcp_transmit_skb(struct pt_regs *ctx, struct sock *sk, struct sk_buff *skb)
 {
-    return 0;
+    return do_trace(ctx, __func__+8, sk, NULL, L3);
 }
 
 /*end: TCP layer trace functions*/
@@ -161,29 +159,29 @@ int kprobe____tcp_transmit_skb(struct pt_regs *ctx, struct sock *sk, struct sk_b
 
 int kprobe____ip_queue_xmit(struct pt_regs *ctx, struct sock *sk, struct sk_buff *skb, struct flowi *fl)
 {
-    return 0;
+    return do_trace(ctx, __func__+8, sk, NULL, L2);
 }
 
 /*Returns 1 if the hook has allowed the packet to pass*/
 /*different with kernel version(4.19.91-22.2.al7.x86_64 vs 3.10.0-693.11.6.el7)*/
 int kprobe__ip_local_out(struct pt_regs *ctx, struct net *net, struct sock *sk, struct sk_buff *skb)
 {
-    return 0;
+    return do_trace(ctx, __func__+8, sk, NULL, L2);
 }
 
 int kprobe__ip_output(struct pt_regs *ctx, struct net *net, struct sock *sk, struct sk_buff *skb)
 {
-    return 0;
+    return do_trace(ctx, __func__+8, sk, NULL, L2);
 }
 
 int kprobe__ip_finish_output(struct pt_regs *ctx, struct net *net, struct sock *sk, struct sk_buff *skb)
 {
-    return 0;
+    return do_trace(ctx, __func__+8, sk, NULL, L2);
 }
 
 int kprobe__ip_finish_output2(struct pt_regs *ctx, struct net *net, struct sock *sk, struct sk_buff *skb)
 {
-    return 0;
+    return do_trace(ctx, __func__+8, sk, NULL, L2);
 }
 
 
@@ -195,7 +193,7 @@ int kprobe__ip_finish_output2(struct pt_regs *ctx, struct net *net, struct sock 
  * 1)dev_hard_start_xmit
  * 2) __dev_xmit_skb
  */
-int kprobe__dev_queue_xmit(struct pt_regs *ctx, struct sk_buff *sk)
+int kprobe__dev_queue_xmit(struct pt_regs *ctx, struct sk_buff *skb)
 {
     return 0;
 }
