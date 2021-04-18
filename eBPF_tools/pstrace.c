@@ -228,15 +228,13 @@ int kprobe__ip_finish_output2(struct pt_regs *ctx, struct net *net, struct sock 
  */
 int kprobe__dev_queue_xmit(struct pt_regs *ctx, struct sk_buff *skb)
 {
-    //return 0;
     return do_trace_skb(ctx, __func__+8, skb);
 }
 
 /*send out directly*/
-int kprobe__dev_hard_start_xmit(struct pt_regs *ctx, struct sk_buff *first, struct net_device *dev,struct netdev_queue *txq)
+int kprobe__dev_hard_start_xmit(struct pt_regs *ctx, struct sk_buff *skb, struct net_device *dev,struct netdev_queue *txq)
 {
-    //return do_trace_skb(ctx, __func__+8, first);
-    return 0;
+    return do_trace_skb(ctx, __func__+8, skb);
 }
 
 #if 0
@@ -260,8 +258,7 @@ int kprobe__xmit_one(struct pt_regs *ctx, struct sk_buff *skb, struct net_device
 /*virtio_net*/
 int kprobe__start_xmit(struct pt_regs *ctx, struct sk_buff *skb, struct net_device *dev)
 {
-    return 0;
-    //return do_trace_sock(ctx, __func__+8, NULL,skb, L1);
+    return do_trace_skb(ctx, __func__+8, skb);
 }
 
 /*end: driver layer trace functions*/
