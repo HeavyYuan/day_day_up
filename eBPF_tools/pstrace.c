@@ -55,18 +55,20 @@ static struct tcphdr *skb_to_tcphdr(const struct sk_buff *skb)
  }
 
 
-static int do_trace_sock(struct pt_regs *ctx,  const char *func_name, struct sock *sk)
+
+static int do_trace_sock(struct pt_regs *ctx, struct ipv4_data_t *ipv4_event, const char *func_name, struct sock *sk)
 {
-    struct ipv4_data_t  ipv4_event = {};
+    //struct ipv4_data_t  ipv4_event = {};
     u64 saddr = 0, daddr = 0;
     u16 sport = 0, dport = 0;
     u8  protocol = 0;
-    ipv4_event.pid = bpf_get_current_pid_tgid();
-    ipv4_event.ip_version = 4;
+    ipv4_event->pid = bpf_get_current_pid_tgid();
+    ipv4_event->ip_version = 4;
 
     int gso_max_segs_offset = offsetof(struct sock, sk_gso_max_segs);
     int sk_lingertime_offset = offsetof(struct sock, sk_lingertime);
-    __builtin_memcpy(&ipv4_event.func_name,func_name,MAX_FUNCNAME_LEN);
+    __builtin_memcpy(&ipv4_event->func_name,func_name,MAX_FUNCNAME_LEN);
+
     if (sk_lingertime_offset - gso_max_segs_offset == 4)
          // 4.10+ with little endian
  #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
@@ -89,44 +91,28 @@ static int do_trace_sock(struct pt_regs *ctx,  const char *func_name, struct soc
     dport = sk->__sk_common.skc_dport;
     sport = ntohs(sport);
     dport = ntohs(dport);
-    ipv4_event.sport = sport;
-    ipv4_event.dport = dport;
-    ipv4_event.saddr = saddr;
-    ipv4_event.daddr = daddr;
-    ipv4_event.protocol = protocol;   
+    ipv4_event->sport = sport;
+    ipv4_event->dport = dport;
+    ipv4_event->saddr = saddr;
+    ipv4_event->daddr = daddr;
+    ipv4_event->protocol = protocol;   
 
-    #if ADDR_FILTER 
-    if (ipv4_event.ip_version == 4) {
-        if (ADDR_FILTER != ipv4_event.saddr && ADDR_FILTER != ipv4_event.daddr)
-            return -1;
-    } else {
-        return -1;
-    }
-    #endif
- 
- 
-    #if PORT_FILTER
-    if ( (ipv4_event.protocol == IPPROTO_UDP || ipv4_event.protocol == IPPROTO_TCP) &&
-     (PORT_FILTER != ipv4_event.sport && PORT_FILTER != ipv4_event.port))
-        return -1;
-    #endif
-    
-    ipv4_event_out.perf_submit(ctx, &ipv4_event, sizeof(ipv4_event));
     return 0;
+
     
 }
 
-static int do_trace_skb(struct pt_regs *ctx, const char *func_name, struct sk_buff *skb)
+static int do_trace_skb(struct pt_regs *ctx, struct ipv4_data_t *ipv4_event, const char *func_name, struct sk_buff *skb)
 {
  
-       struct ipv4_data_t  ipv4_event = {};
+       //struct ipv4_data_t  ipv4_event = {};
        u64 saddr = 0, daddr = 0;
        u16 sport = 0, dport = 0;
        u8  protocol = 0;
 
-       ipv4_event.pid = bpf_get_current_pid_tgid();
-       ipv4_event.ip_version = 4;
-        __builtin_memcpy(&ipv4_event.func_name,func_name,MAX_FUNCNAME_LEN);
+       ipv4_event->pid = bpf_get_current_pid_tgid();
+       ipv4_event->ip_version = 4;
+        __builtin_memcpy(&ipv4_event->func_name,func_name,MAX_FUNCNAME_LEN);
 
        struct tcphdr *tcp = skb_to_tcphdr(skb);
        struct iphdr *ip = skb_to_iphdr(skb);    
@@ -137,11 +123,24 @@ static int do_trace_skb(struct pt_regs *ctx, const char *func_name, struct sk_bu
        dport = tcp->dest;
        sport = ntohs(sport);
        dport = ntohs(dport);
-       ipv4_event.sport = sport;
-       ipv4_event.dport = dport;
-       ipv4_event.saddr = saddr;
-       ipv4_event.daddr = daddr;
-       ipv4_event.protocol = protocol;   
+       ipv4_event->sport = sport;
+       ipv4_event->dport = dport;
+       ipv4_event->saddr = saddr;
+       ipv4_event->daddr = daddr;
+       ipv4_event->protocol = protocol;   
+
+       return 0;
+}
+
+static int do_trace(struct pt_regs *ctx,  const char *func_name, struct sock *sk,struct sk_buff *skb, int layer)
+{
+    struct ipv4_data_t ipv4_event = {};
+
+    if(layer == L2 || layer == L3){
+        do_trace_sock(ctx, &ipv4_event,func_name, sk); 
+    }else if(layer == L1){
+        do_trace_skb(ctx,&ipv4_event, func_name, skb);
+    }
 
     #if ADDR_FILTER 
     if (ipv4_event.ip_version == 4) {
@@ -162,27 +161,27 @@ static int do_trace_skb(struct pt_regs *ctx, const char *func_name, struct sk_bu
     ipv4_event_out.perf_submit(ctx, &ipv4_event, sizeof(ipv4_event));
     return 0;
     
-    
 }
-
 
 /*begin: TCP layer trace functions*/
 int kprobe__tcp_sendmsg(struct pt_regs *ctx,struct sock *sk)
 //int kprobe__tcp_sendmsg(struct pt_regs *ctx,struct sock *sk, struct msghdr *msg, size_t size)
 {
-    return do_trace_sock(ctx, __func__+8, sk);
+    //return do_trace_sock(ctx, __func__+8, sk);
+    return 0;
 }
 
 int kprobe__tcp_write_xmit(struct pt_regs *ctx,struct sock *sk)
 {
-    return do_trace_sock(ctx, __func__+8, sk);
+    //return do_trace_sock(ctx, __func__+8, sk);
+    return 0;
 }
 
 
 /* Build TCP header and checksum it. */
 int kprobe____tcp_transmit_skb(struct pt_regs *ctx, struct sock *sk, struct sk_buff *skb)
 {
-    return do_trace_sock(ctx, __func__+8, sk);
+    return do_trace(ctx, __func__+8, sk, skb, L3);
 }
 
 /*end: TCP layer trace functions*/
@@ -192,29 +191,29 @@ int kprobe____tcp_transmit_skb(struct pt_regs *ctx, struct sock *sk, struct sk_b
 
 int kprobe____ip_queue_xmit(struct pt_regs *ctx, struct sock *sk, struct sk_buff *skb, struct flowi *fl)
 {
-    return do_trace_sock(ctx, __func__+8, sk);
+    return do_trace(ctx, __func__+8, sk, skb, L2);
 }
 
 /*Returns 1 if the hook has allowed the packet to pass*/
 /*different with kernel version(4.19.91-22.2.al7.x86_64 vs 3.10.0-693.11.6.el7)*/
 int kprobe__ip_local_out(struct pt_regs *ctx, struct net *net, struct sock *sk, struct sk_buff *skb)
 {
-    return do_trace_sock(ctx, __func__+8, sk);
+    return do_trace(ctx, __func__+8, sk, skb, L2);
 }
 
 int kprobe__ip_output(struct pt_regs *ctx, struct net *net, struct sock *sk, struct sk_buff *skb)
 {
-    return do_trace_sock(ctx, __func__+8, sk);
+    return do_trace(ctx, __func__+8, sk, skb, L2);
 }
 
 int kprobe__ip_finish_output(struct pt_regs *ctx, struct net *net, struct sock *sk, struct sk_buff *skb)
 {
-    return do_trace_sock(ctx, __func__+8, sk);
+    return do_trace(ctx, __func__+8, sk, skb, L2);
 }
 
 int kprobe__ip_finish_output2(struct pt_regs *ctx, struct net *net, struct sock *sk, struct sk_buff *skb)
 {
-    return do_trace_sock(ctx, __func__+8, sk);
+    return do_trace(ctx, __func__+8, sk, skb, L2);
 }
 
 
@@ -228,13 +227,13 @@ int kprobe__ip_finish_output2(struct pt_regs *ctx, struct net *net, struct sock 
  */
 int kprobe__dev_queue_xmit(struct pt_regs *ctx, struct sk_buff *skb)
 {
-    return do_trace_skb(ctx, __func__+8, skb);
+    return do_trace(ctx, __func__+8, NULL, skb, L1);
 }
 
 /*send out directly*/
 int kprobe__dev_hard_start_xmit(struct pt_regs *ctx, struct sk_buff *skb, struct net_device *dev,struct netdev_queue *txq)
 {
-    return do_trace_skb(ctx, __func__+8, skb);
+    return do_trace(ctx, __func__+8, NULL, skb, L1);
 }
 
 #if 0
@@ -258,7 +257,7 @@ int kprobe__xmit_one(struct pt_regs *ctx, struct sk_buff *skb, struct net_device
 /*virtio_net*/
 int kprobe__start_xmit(struct pt_regs *ctx, struct sk_buff *skb, struct net_device *dev)
 {
-    return do_trace_skb(ctx, __func__+8, skb);
+    return do_trace(ctx, __func__+8, NULL, skb, L1);
 }
 
 /*end: driver layer trace functions*/
