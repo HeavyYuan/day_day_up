@@ -30,6 +30,7 @@ struct ipv4_data_t {
      u64 daddr;
      u16 sport;
      u16 dport;
+     u32 tcpseq;
      u32 stack_id;
  };
 
@@ -56,9 +57,8 @@ static struct tcphdr *skb_to_tcphdr(const struct sk_buff *skb)
 
 
 
-static int do_trace_sock(struct pt_regs *ctx, struct ipv4_data_t *ipv4_event, const char *func_name, struct sock *sk)
+static int do_trace_sock(struct pt_regs *ctx, struct ipv4_data_t *ipv4_event, const char *func_name, struct sock *sk,struct sk_buff *skb)
 {
-    //struct ipv4_data_t  ipv4_event = {};
     u64 saddr = 0, daddr = 0;
     u16 sport = 0, dport = 0;
     u8  protocol = 0;
@@ -96,6 +96,13 @@ static int do_trace_sock(struct pt_regs *ctx, struct ipv4_data_t *ipv4_event, co
     ipv4_event->saddr = saddr;
     ipv4_event->daddr = daddr;
     ipv4_event->protocol = protocol;   
+    if(skb != NULL){
+       u32 tcpseq = 0;
+       struct tcphdr *tcp = skb_to_tcphdr(skb);
+       tcpseq = tcp->seq;
+       tcpseq = ntohl(tcpseq);
+       ipv4_event->tcpseq = tcpseq;
+    }
 
     return 0;
 
@@ -105,10 +112,10 @@ static int do_trace_sock(struct pt_regs *ctx, struct ipv4_data_t *ipv4_event, co
 static int do_trace_skb(struct pt_regs *ctx, struct ipv4_data_t *ipv4_event, const char *func_name, struct sk_buff *skb)
 {
  
-       //struct ipv4_data_t  ipv4_event = {};
        u64 saddr = 0, daddr = 0;
        u16 sport = 0, dport = 0;
        u8  protocol = 0;
+       u32 tcpseq;
 
        ipv4_event->pid = bpf_get_current_pid_tgid();
        ipv4_event->ip_version = 4;
@@ -117,10 +124,12 @@ static int do_trace_skb(struct pt_regs *ctx, struct ipv4_data_t *ipv4_event, con
        struct tcphdr *tcp = skb_to_tcphdr(skb);
        struct iphdr *ip = skb_to_iphdr(skb);    
        protocol = ip->protocol;
+       tcpseq = tcp->seq;
        saddr = ip->saddr;
        daddr = ip->daddr;
        sport = tcp->source;
        dport = tcp->dest;
+       tcpseq = ntohl(tcpseq);
        sport = ntohs(sport);
        dport = ntohs(dport);
        ipv4_event->sport = sport;
@@ -128,6 +137,8 @@ static int do_trace_skb(struct pt_regs *ctx, struct ipv4_data_t *ipv4_event, con
        ipv4_event->saddr = saddr;
        ipv4_event->daddr = daddr;
        ipv4_event->protocol = protocol;   
+       ipv4_event->tcpseq = tcpseq;
+
 
        return 0;
 }
@@ -137,7 +148,7 @@ static int do_trace(struct pt_regs *ctx,  const char *func_name, struct sock *sk
     struct ipv4_data_t ipv4_event = {};
 
     if(layer == L2 || layer == L3){
-        do_trace_sock(ctx, &ipv4_event,func_name, sk); 
+        do_trace_sock(ctx, &ipv4_event,func_name, sk, skb); 
     }else if(layer == L1){
         do_trace_skb(ctx,&ipv4_event, func_name, skb);
     }

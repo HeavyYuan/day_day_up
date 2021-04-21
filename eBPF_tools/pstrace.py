@@ -52,6 +52,7 @@ class Data(ct.Structure):
             ("daddr", ct.c_ulonglong),
             ("sport",ct.c_ushort),
             ("dport",ct.c_ushort),
+            ("tcpseq",ct.c_uint),
             ("stack_id",ct.c_uint),
             ]
 
@@ -64,7 +65,7 @@ def print_event(cpu, data, size):
         return
 
     if event.protocol == socket.IPPROTO_TCP:
-         pkt_info = ("%s:%u -> %s:%u" % (saddr, event.sport, daddr, event.dport))
+         pkt_info = ("%s:%u -> %s:%u seq:%-20s" % (saddr, event.sport, daddr, event.dport, event.tcpseq))
 
     print ("%-5d %-45s %-10s" % (event.pid,pkt_info, event.func_name))
 
